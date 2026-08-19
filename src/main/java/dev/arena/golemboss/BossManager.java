@@ -228,7 +228,7 @@ public class BossManager implements Listener {
                 for (LivingEntity le : b.minions) {
                     if (le == null || le.isDead() || !le.isValid()) continue;
                     if (!(le instanceof Mob m)) continue;
-                    LivingEntity target = nearestPlayer(m, MINION_AGGRO);
+                    Player target = nearestPlayer(m, MINION_AGGRO);
                     if (target != null && m.getTarget() != target) m.setTarget(target);
                 }
             }, 0L, 10L);
@@ -236,7 +236,7 @@ public class BossManager implements Listener {
         if (b.aggroTask == null) {
             b.aggroTask = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
                 if (b.defeated || b.entity == null || b.entity.isDead()) return;
-                LivingEntity target = nearestPlayer(b.entity, BOSS_RADIUS);
+                Player target = nearestPlayer(b.entity, BOSS_RADIUS);
                 if (target != null && b.entity.getTarget() != target) {
                     b.entity.setTarget(target);
                 }
@@ -256,7 +256,7 @@ public class BossManager implements Listener {
         }
     }
 
-    private LivingEntity nearestPlayer(LivingEntity origin, double range) {
+    private Player nearestPlayer(LivingEntity origin, double range) {
         Player best = null; double bestD = range * range;
         World ow = origin.getWorld();
         Location ol = origin.getLocation();
