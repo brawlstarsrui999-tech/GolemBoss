@@ -9,10 +9,10 @@ commands:
   event:
     description: Главная команда босса «Голем Разрушитель»
     usage: |
-      /event golem <x> <y> <z>   - призвать босса через 15 минут
-      /event golem               - призвать на свои координаты
-      /event golem cancel        - отменить призыв
-      /event golem info          - статус босса
+      /event golem <время> <x> <y> <z>  - призвать (минуты, 0 = сразу)
+      /event golem <время>              - на свои координаты
+      /event golem cancel               - отменить призыв
+      /event golem info                 - статус босса
     permission: golemboss.admin
     aliases: [golem, boss]
 
