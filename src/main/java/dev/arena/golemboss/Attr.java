@@ -14,6 +14,9 @@ import java.util.Locale;
  */
 public final class Attr {
 
+    /** Ванильный предел атрибута max_health — выше этого значения сущности задать нельзя. */
+    public static final double MAX_HEALTH_LIMIT = 1024.0;
+
     private Attr() {}
 
     private static AttributeInstance find(LivingEntity e, String... names) {
@@ -40,8 +43,16 @@ public final class Attr {
 
     public static void setMaxHealth(LivingEntity e, double v) {
         AttributeInstance a = find(e, "GENERIC_MAX_HEALTH", "MAX_HEALTH", "GENERIC_MAX_HEALTH");
-        if (a != null) a.setBaseValue(v);
-        e.setHealth(v);
+        if (a == null) return;
+        // В ваниле/Paper атрибут max_health жёстко ограничен 1024.0:
+        // значение больше этого записать в сущность нельзя, иначе setHealth()
+        // бросит IllegalArgumentException (Health value ... must be between 0 and 1024.0).
+        // Если в конфиге задано больше (например, 1500), плагин сам ведёт здоровье
+        // босса (BossManager.ActiveBoss.hp/maxHp), поэтому сущности выставляем
+        // максимально допустимое значение, а не падаем с ошибкой.
+        double value = Math.max(1.0, Math.min(v, a.getMax()));
+        a.setBaseValue(value);
+        e.setHealth(value);
     }
 
     public static void setScale(LivingEntity e, double v) {

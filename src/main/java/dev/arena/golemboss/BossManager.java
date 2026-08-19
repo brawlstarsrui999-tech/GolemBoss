@@ -120,6 +120,13 @@ public class BossManager implements Listener {
 
         BOSS_KEY   = new NamespacedKey(plugin, "golem_boss");
         MINION_KEY = new NamespacedKey(plugin, "golem_minion");
+
+        if (MAX_HP > Attr.MAX_HEALTH_LIMIT) {
+            plugin.getLogger().warning("golem.max-hp (" + MAX_HP + ") больше ванильного предела атрибута max_health ("
+                    + Attr.MAX_HEALTH_LIMIT + "). Бой будет идти по здоровью, которое плагин ведёт сам"
+                    + " (босс-бар, фазы, награды), а самой сущности будет выставлено максимум "
+                    + Attr.MAX_HEALTH_LIMIT + " HP.");
+        }
     }
 
     public boolean isScheduled() { return summon != null; }
@@ -170,26 +177,36 @@ public class BossManager implements Listener {
         b.world = s.world; b.x = s.x; b.y = s.y; b.z = s.z;
         b.maxHp = MAX_HP; b.hp = MAX_HP;
 
-        b.entity = spawnGolem(s.world, s.x, s.y, s.z, P1_SCALE, P1_SPEED, 4.0, "1", false);
-        Attr.setMaxHealth(b.entity, MAX_HP);
-        b.bar = Bukkit.createBossBar(Msg.legacy(bossTitle()), BarColor.PURPLE, BarStyle.SOLID);
-        b.bar.setVisible(true);
-        b.bar.setProgress(1.0);
+        try {
+            b.entity = spawnGolem(s.world, s.x, s.y, s.z, P1_SCALE, P1_SPEED, 4.0, "1", false);
+            Attr.setMaxHealth(b.entity, MAX_HP);
+            b.bar = Bukkit.createBossBar(Msg.legacy(bossTitle()), BarColor.PURPLE, BarStyle.SOLID);
+            b.bar.setVisible(true);
+            b.bar.setProgress(1.0);
 
-        // ensure initial players in radius see the bar immediately
-        Location spawnLoc = new Location(s.world, s.x, s.y, s.z);
-        for (Player p : Bukkit.getOnlinePlayers()) {
-            if (sameWorld(p.getWorld(), s.world) &&
-                    p.getLocation().distanceSquared(spawnLoc) <= (double) BOSS_RADIUS * BOSS_RADIUS) {
-                b.bar.addPlayer(p);
+            // ensure initial players in radius see the bar immediately
+            Location spawnLoc = new Location(s.world, s.x, s.y, s.z);
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (sameWorld(p.getWorld(), s.world) &&
+                        p.getLocation().distanceSquared(spawnLoc) <= (double) BOSS_RADIUS * BOSS_RADIUS) {
+                    b.bar.addPlayer(p);
+                }
             }
-        }
 
-        active = b;
-        startTasks(b);
-        updateBossBar(b);
-        playAt(b.entity.getLocation(), Sound.ENTITY_WITHER_SPAWN, 1.2f, 0.6f);
-        playAt(b.entity.getLocation(), Sound.ENTITY_IRON_GOLEM_REPAIR, 1.4f, 0.5f);
+            active = b;
+            startTasks(b);
+            updateBossBar(b);
+            playAt(b.entity.getLocation(), Sound.ENTITY_WITHER_SPAWN, 1.2f, 0.6f);
+            playAt(b.entity.getLocation(), Sound.ENTITY_IRON_GOLEM_REPAIR, 1.4f, 0.5f);
+        } catch (Throwable t) {
+            // Страховка: не оставляем голема в мире без босс-бара и задач
+            plugin.getLogger().severe("Не удалось призвать Голема Разрушителя: " + t);
+            if (b.entity != null && !b.entity.isDead()) b.entity.remove();
+            for (LivingEntity m : b.minions) if (m != null && !m.isDead()) m.remove();
+            if (b.bar != null) b.bar.removeAll();
+            stopTasks(b);
+            return;
+        }
 
         Msg.broadcast(line());
         Msg.broadcast(Msg.GRAD + Msg.B + "        ✦   БОСС ПРИЗВАН   ✦</b></gradient>");
@@ -207,29 +224,35 @@ public class BossManager implements Listener {
 
     private IronGolem spawnGolem(World w, double x, double y, double z, double scale, double speed, double atkSpeed, String tag, boolean cracked) {
         IronGolem g = w.spawn(new Location(w, x, y, z), IronGolem.class);
-        g.setPersistent(true);
-        g.setRemoveWhenFarAway(false);
-        g.getPersistentDataContainer().set(BOSS_KEY, PersistentDataType.STRING, tag);
-        g.customName(Msg.parse("<gradient:#7c3aed:#d8b4fe><b>✦ ГОЛЕМ РАЗРУШИТЕЛЬ ✦</b></gradient>"));
-        g.setCustomNameVisible(true);
-        g.setAI(true);
-        g.setAware(true);
-        // false = враждебен к игрокам (не «создан игроком»)
-        g.setPlayerCreated(false);
-        Attr.setScale(g, scale);
-        Attr.setSpeed(g, speed);
-        Attr.setAttackSpeed(g, atkSpeed);
-        Attr.setAttackDamage(g, BOSS_DMG);
-        Attr.setFollowRange(g, (double) Math.max(BOSS_RADIUS, 64));
-        if (cracked) {
-            Attr.setMaxHealth(g, 4.0);
-            g.setHealth(1.0);
-        } else {
-            Attr.setMaxHealth(g, MAX_HP);
+        try {
+            g.setPersistent(true);
+            g.setRemoveWhenFarAway(false);
+            g.getPersistentDataContainer().set(BOSS_KEY, PersistentDataType.STRING, tag);
+            g.customName(Msg.parse("<gradient:#7c3aed:#d8b4fe><b>✦ ГОЛЕМ РАЗРУШИТЕЛЬ ✦</b></gradient>"));
+            g.setCustomNameVisible(true);
+            g.setAI(true);
+            g.setAware(true);
+            // false = враждебен к игрокам (не «создан игроком»)
+            g.setPlayerCreated(false);
+            Attr.setScale(g, scale);
+            Attr.setSpeed(g, speed);
+            Attr.setAttackSpeed(g, atkSpeed);
+            Attr.setAttackDamage(g, BOSS_DMG);
+            Attr.setFollowRange(g, (double) Math.max(BOSS_RADIUS, 64));
+            if (cracked) {
+                Attr.setMaxHealth(g, 4.0);
+                g.setHealth(1.0);
+            } else {
+                Attr.setMaxHealth(g, MAX_HP);
+            }
+            Player first = nearestPlayer(g, BOSS_RADIUS);
+            if (first != null) g.setTarget(first);
+            return g;
+        } catch (Throwable t) {
+            // Никогда не оставляем «полу-заспавненного» голема без босс-бара и задач.
+            if (!g.isDead()) g.remove();
+            throw new RuntimeException("Не удалось настроить Голема Разрушителя", t);
         }
-        Player first = nearestPlayer(g, BOSS_RADIUS);
-        if (first != null) g.setTarget(first);
-        return g;
     }
 
     private void startTasks(ActiveBoss b) {
